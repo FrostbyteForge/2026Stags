@@ -4,14 +4,13 @@
 
 package frc.robot;
 
-import static edu.wpi.first.units.Units.*;
-
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.commands.FollowPathCommand;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -22,22 +21,16 @@ import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Superstructure;
 
 public class RobotContainer {
-    private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
-    private double MaxAngularRate = RotationsPerSecond.of(1.6).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
-
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-            .withDeadband(MaxSpeed * 0.1).withRotationalDeadband(MaxAngularRate * 0.1) // Add a 10% deadband
+            .withDeadband(Constants.DriveConstants.MaxSpeed * 0.1).withRotationalDeadband(Constants.DriveConstants.MaxAngularRate * 0.1) // Add a 10% deadband
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
-    private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
-    private final SwerveRequest.RobotCentric forwardStraight = new SwerveRequest.RobotCentric()
-            .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
 
-    private final Telemetry logger = new Telemetry(MaxSpeed);
+    private final Telemetry logger = new Telemetry(Constants.DriveConstants.MaxSpeed);
 
     public final Drivetrain drivetrain = TunerConstants.createDrivetrain();
-    public final Superstructure superstructure = new Superstructure();
+    public final Superstructure superstructure = new Superstructure(drivetrain);
 
     /* Path follower */
     private final SendableChooser<Command> autoChooser;
@@ -58,9 +51,9 @@ public class RobotContainer {
         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() ->
-                drive.withVelocityX(-Constants.OperatorConstants.driverController.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
-                    .withVelocityY(-Constants.OperatorConstants.driverController.getLeftX() * MaxSpeed) // Drive left with negative X (left)
-                    .withRotationalRate(-Constants.OperatorConstants.driverController.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
+                drive.withVelocityX(-MathUtil.applyDeadband(Constants.OperatorConstants.driverController.getLeftY(), 0.1) * Constants.DriveConstants.MaxSpeed) // Drive forward with negative Y (forward)
+                    .withVelocityY(-MathUtil.applyDeadband(Constants.OperatorConstants.driverController.getLeftX(), 0.1) * Constants.DriveConstants.MaxSpeed) // Drive left with negative X (left)
+                    .withRotationalRate(-MathUtil.applyDeadband(Constants.OperatorConstants.driverController.getRightX(), 0.1) * Constants.DriveConstants.MaxAngularRate) // Drive counterclockwise with negative X (left)
             )
         );
 
@@ -73,6 +66,8 @@ public class RobotContainer {
 
         // Reset the field-centric heading on left bumper press.
         Constants.OperatorConstants.driverController.a().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+
+        Constants.OperatorConstants.driverController.rightBumper().whileTrue(drivetrain.faceTowardsTarget);
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
